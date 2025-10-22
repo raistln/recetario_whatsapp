@@ -201,3 +201,29 @@ class SupabaseManager:
         except Exception as e:
             print(f"Error obteniendo creadores: {e}")
             return []
+
+    def guardar_estado_procesamiento(self, fecha_iso: Optional[str]) -> bool:
+        """Guarda la última fecha procesada en Supabase para permitir reanudaciones."""
+        try:
+            payload = {
+                'id': 1,
+                'ultima_fecha_iso': fecha_iso,
+                'ultima_actualizacion': datetime.utcnow().isoformat()
+            }
+
+            self.client.table('estado_procesamiento').upsert(payload).execute()
+            return True
+        except Exception as e:
+            print(f"Error guardando estado en Supabase: {e}")
+            return False
+
+    def obtener_estado_procesamiento(self) -> Optional[str]:
+        """Obtiene la última fecha procesada almacenada en Supabase."""
+        try:
+            response = self.client.table('estado_procesamiento').select('ultima_fecha_iso').eq('id', 1).limit(1).execute()
+            if response.data:
+                return response.data[0].get('ultima_fecha_iso')
+            return None
+        except Exception as e:
+            print(f"Error obteniendo estado de Supabase: {e}")
+            return None

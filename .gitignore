@@ -119,7 +119,7 @@ debug_*.txt
 
 # 🚫 Archivos específicos del proyecto
 # -------------------------------------
-state/
+!state/
 *.json.bak
 *.backup
 old/

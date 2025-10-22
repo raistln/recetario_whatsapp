@@ -410,7 +410,14 @@ class WhatsAppExtractor:
                     estado["ultima_fecha_iso"] = fecha_dt.strftime('%Y-%m-%d')
                 except ValueError:
                     pass
-        
+
+        # Guardar estado en Supabase si es posible
+        try:
+            if self.supabase_manager:
+                self.supabase_manager.guardar_estado_procesamiento(estado["ultima_fecha_iso"])
+        except Exception as e:
+            print(f"Error guardando estado en Supabase: {e}")
+
         try:
             os.makedirs('state', exist_ok=True)
             with open('state/last_processed.json', 'w', encoding='utf-8') as f:
@@ -420,6 +427,15 @@ class WhatsAppExtractor:
 
     def _obtener_fecha_guardada(self) -> Optional[str]:
         """Obtiene la fecha guardada del último procesamiento en formato YYYY-MM-DD."""
+        # Priorizar estado persistido en Supabase
+        try:
+            if self.supabase_manager:
+                fecha_supabase = self.supabase_manager.obtener_estado_procesamiento()
+                if fecha_supabase:
+                    return fecha_supabase
+        except Exception as e:
+            print(f"Error leyendo estado de Supabase: {e}")
+
         ruta_estado = os.path.join('state', 'last_processed.json')
 
         if not os.path.exists(ruta_estado):
