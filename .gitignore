@@ -1,0 +1,156 @@
+# 📁 .gitignore para Recetario WhatsApp
+# ======================================
+
+# 🚫 Entornos virtuales y Python
+# --------------------------------
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
+
+# 🚫 Archivos de configuración sensibles
+# --------------------------------------
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets.json
+
+# 🚫 Archivos temporales y de sistema
+# -----------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# 🚫 Archivos de IDE y editores
+# ------------------------------
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.sublime-settings
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+
+# 🚫 Bases de datos locales y archivos de datos
+# ---------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+local_database.db
+supabase_local.db
+data/
+temp/
+tmp/
+
+# 🚫 Logs y reportes
+# ------------------
+*.log
+logs/
+log/
+error_log.txt
+access_log.txt
+debug.log
+app.log
+
+# 🚫 Reportes de testing y cobertura
+# ----------------------------------
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+.tox/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# 🚫 Archivos de instalación y distribución
+# ------------------------------------------
+build/
+dist/
+*.egg-info/
+.eggs/
+MANIFEST
+
+# 🚫 Archivos de Jupyter Notebook
+# -------------------------------
+.ipynb_checkpoints
+*.ipynb_checkpoints
+
+# 🚫 Archivos de testing temporales
+# ---------------------------------
+test_output.txt
+extraction_test.txt
+temp_*.txt
+debug_*.txt
+
+# 🚫 Archivos específicos del proyecto
+# -------------------------------------
+state/
+*.json.bak
+*.backup
+old/
+backup/
+archive/
+
+# 🚫 Archivos de configuración de Poetry
+# ---------------------------------------
+poetry.lock.backup
+
+# 🚫 Archivos de configuración de Git
+# -----------------------------------
+.gitignore.local
+
+# 🚫 Archivos de instalación de Windows
+# --------------------------------------
+*.msi
+*.exe
+*.bat
+*.cmd
+
+# ✅ Archivos que SÍ se incluyen
+# -------------------------------
+# El .gitignore no afecta estos archivos:
+# README.md
+# pyproject.toml
+# setup.py
+# run_app.py
+# app_streamlit.py
+# docs/
+# src/
+# samples/
+# tests/
+# sql/

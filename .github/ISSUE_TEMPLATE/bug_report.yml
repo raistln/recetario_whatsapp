@@ -1,0 +1,88 @@
+name: 🐛 Reportar Error
+description: Reportar un bug o error en el proyecto
+title: "[BUG] Descripción breve del error"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🐛 Reportar Error
+
+        Gracias por reportar un error. Por favor completa la información a continuación para ayudarnos a solucionarlo.
+
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: 📝 Descripción del Error
+      description: Describe qué está pasando y qué esperabas que pasara
+      placeholder: |
+        Ejemplo:
+        - Estoy intentando procesar un archivo de WhatsApp
+        - Obtengo el error "Respuesta no válida de Mistral"
+        - Esperaba que extrajera las recetas correctamente
+    validations:
+      required: true
+
+  - type: textarea
+    id: pasos
+    attributes:
+      label: 🔄 Pasos para Reproducir
+      description: Lista los pasos exactos para reproducir el error
+      placeholder: |
+        1. Ejecuté `python setup.py`
+        2. Configuré las variables en .env
+        3. Ejecuté `python -m src.recetario_whatsapp --file archivo.txt`
+        4. Apareció el error...
+      value: |
+        1.
+        2.
+        3.
+        4.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 📋 Logs y Mensajes de Error
+      description: Copia y pega los logs completos o mensajes de error
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: 🔖 Versión
+      description: ¿Qué versión del proyecto estás usando?
+      placeholder: "0.1.0"
+
+  - type: dropdown
+    id: sistema
+    attributes:
+      label: 💻 Sistema Operativo
+      options:
+        - Windows 10/11
+        - macOS
+        - Linux (Ubuntu/Debian)
+        - Linux (CentOS/Fedora)
+        - Otro
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: 🐍 Versión de Python
+      description: ¿Qué versión de Python estás usando?
+      placeholder: "3.11.9"
+
+  - type: checkboxes
+    id: troubleshooting
+    attributes:
+      label: ✅ Verificaciones Previas
+      description: Por favor confirma que has revisado estos puntos
+      options:
+        - label: He revisado la documentación en `docs/`
+        - label: He verificado que mi API key de Mistral es válida
+        - label: He configurado correctamente las variables de entorno
+        - label: He ejecutado `python setup.py` correctamente
+        - label: El error persiste después de reiniciar

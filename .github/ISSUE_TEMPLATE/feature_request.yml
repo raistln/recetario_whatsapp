@@ -1,0 +1,66 @@
+name: ✨ Solicitar Nueva Característica
+description: Sugerir una nueva funcionalidad o mejora
+title: "[FEATURE] Descripción breve de la nueva característica"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ✨ Solicitar Nueva Característica
+
+        ¡Gracias por tu sugerencia! Describe la nueva funcionalidad que te gustaría ver.
+
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: 📝 Descripción de la Característica
+      description: Describe qué te gustaría que el proyecto pudiera hacer
+      placeholder: |
+        Ejemplo:
+        - Me gustaría poder exportar las recetas a PDF
+        - Sería útil filtrar por tipo de cocina (italiana, mexicana, etc.)
+        - Necesito soporte para archivos de WhatsApp en otros idiomas
+    validations:
+      required: true
+
+  - type: textarea
+    id: uso
+    attributes:
+      label: 🎯 Caso de Uso
+      description: Explica por qué esta característica sería útil
+      placeholder: |
+        Esta funcionalidad me ayudaría porque...
+        Los usuarios podrían...
+        Resolvería el problema de...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternativa
+    attributes:
+      label: 🔄 Alternativas Consideradas
+      description: ¿Has pensado en alguna alternativa o solución temporal?
+      placeholder: |
+        Actualmente estoy solucionando esto de la siguiente manera...
+        Otras herramientas que hacen algo similar...
+
+  - type: textarea
+    id: implementacion
+    attributes:
+      label: 💡 Sugerencia de Implementación
+      description: Si tienes ideas sobre cómo implementar esta característica, compártelas
+      placeholder: |
+        Podría implementarse agregando...
+        Usando la API de... para...
+        Modificando el archivo... en la función...
+
+  - type: checkboxes
+    id: impacto
+    attributes:
+      label: 📊 Impacto Esperado
+      description: ¿Qué tan importante es esta característica?
+      options:
+        - label: 🔴 Crítica - Sin esto el proyecto no funciona
+        - label: 🟡 Importante - Mejora significativamente la experiencia
+        - label: 🟢 Buena idea - Sería una mejora interesante
+        - label: 🔵 Futura - Para considerar en el roadmap
