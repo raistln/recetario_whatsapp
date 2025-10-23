@@ -339,3 +339,4 @@ def mock_open(read_data=""):
     """Helper para mock de open."""
     from unittest.mock import mock_open as original_mock_open
     return original_mock_open(read_data=read_data)
+

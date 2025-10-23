@@ -220,3 +220,4 @@ Triturar
         assert resultado['recetas_insertadas'] == 2
         assert mock_mistral.extraer_receta.call_count == 2
         assert mock_supabase.insertar_receta.call_count == 2
+

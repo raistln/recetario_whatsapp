@@ -1,178 +1,163 @@
 # 🍳 Recetario WhatsApp
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
-[![Streamlit](https://img.shields.io/badge/streamlit-1.28+-red.svg)](https://streamlit.io/)
-[![Mistral AI](https://img.shields.io/badge/mistral--ai-v1-green.svg)](https://mistral.ai/)
-[![Supabase](https://img.shields.io/badge/supabase-2.0+-black.svg)](https://supabase.com/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.38+-FF4B4B.svg)](https://streamlit.io/)
+[![Supabase](https://img.shields.io/badge/Supabase-Storage-3FCF8E.svg)](https://supabase.com/)
+[![Cloudinary](https://img.shields.io/badge/Cloudinary-Gallery-blue.svg)](https://cloudinary.com/)
+[![Poetry](https://img.shields.io/badge/Poetry-Dependency_Management-60A5FA.svg)](https://python-poetry.org/)
 
-> Convierte chats de WhatsApp en un recetario interactivo usando IA. Extrae recetas automáticamente con Mistral AI y guárdalas en una base de datos con interfaz web moderna.
+> Convierte chats de WhatsApp en un recetario colaborativo con IA, galería de fotos Cloudinary y administración web en tiempo real.
 
-## ✨ Características
+## ✨ Highlights
 
-- 🧠 **Extracción automática** de recetas desde chats de WhatsApp usando Mistral AI
-- 📦 **Bloques optimizados** para reducir llamadas API (80% más eficiente)
-- 🗄️ **Base de datos Supabase** con interfaz web moderna
-- 🔍 **Búsqueda y filtros** por ingredientes, autor, fecha
-- 📱 **Interfaz responsive** con Streamlit
-- 🚀 **Configuración automática** con un solo comando
+- 🧠 **Extracción con IA (Mistral)** de ingredientes y pasos.
+- 📚 **Base de datos Supabase** con migraciones SQL versionadas.
+- 🖼️ **Galería multifoto** por receta integrada con Cloudinary (autor por imagen).
+- 🔎 **Búsqueda en vivo, filtros por autor, estado de fotos y fecha.**
+- ⚙️ **Deploy rápido con Streamlit** + modo desarrollador para ejecuciones locales.
+- 🧪 **Pipeline de pruebas y scripts de mantenimiento** listos.
 
-## 🚀 Instalación Rápida
+## 🚀 Instalación (Poetry)
 
 ```bash
-# 1. Clona el repositorio
-git clone https://github.com/tu-usuario/recetario-whatsapp.git
+# Clona el repositorio
+git clone https://github.com/[tu-usuario-github]/recetario-whatsapp.git
 cd recetario-whatsapp
 
-# 2. Configura el entorno automáticamente
-python setup.py
+# Crea el entorno virtual con Poetry
+poetry install
 
-# 3. Ejecuta la aplicación
-python run_app.py
+# Activa el shell
+poetry shell
+
+# Ejecuta el panel Streamlit
+poetry run streamlit run app_streamlit.py
 ```
 
-## 📋 ¿Qué hace?
+> 💡 Alternativa con `pip`: consulta `docs/INSTALL.md` si prefieres entorno manual.
 
-1. **Procesa archivos de WhatsApp** y extrae mensajes automáticamente
-2. **Usa IA para identificar recetas** con ingredientes y pasos
-3. **Guarda en base de datos** con información estructurada
-4. **Muestra en interfaz web** con búsqueda y filtros
-5. **Optimiza tokens** para reducir costos de API
-
-## 🛠️ Configuración
-
-### Variables de Entorno
-
-Crea un archivo `.env` con:
+## 🔐 Variables de entorno (`.env`)
 
 ```env
-# API de Mistral AI (obtener en https://console.mistral.ai/)
-MISTRAL_API_KEY=sk-tu-api-key-aqui
+# IA
+MISTRAL_API_KEY=sk-tu-api-key
 
-# Base de datos Supabase (obtener en https://supabase.com/dashboard)
+# Supabase
 SUPABASE_URL=https://tu-proyecto.supabase.co
-SUPABASE_KEY=tu-anon-key-aqui
+SUPABASE_KEY=eyJhbGciOi... (anon/public)
 SUPABASE_STORAGE_BUCKET=recetas
+
+# Cloudinary
+CLOUDINARY_URL=cloudinary://<api_key>:<secret>@<cloud_name>
 ```
 
-### Requisitos
+## 🧭 Flujo Principal
 
-- **Python 3.11** (usa `py -3.11` en Windows)
-- **Conexión a internet** para descargar dependencias
-- **API keys** de Mistral y Supabase
+1. **Carga un `.txt` exportado** de WhatsApp (modo panel o CLI).
+2. El extractor agrupa recetas, autor y metadatos.
+3. **Mistral IA** limpia ingredientes y pasos (tokens optimizados).
+4. Se guardan en **Supabase** (tabla `recetas`) + galería (JSONB `imagenes`).
+5. **Streamlit** muestra fichas con edición, filtros y carruseles.
 
-## 📁 Estructura del Proyecto
+## 🖼️ Galería Cloudinary
+
+- Botón “📸 Subir Foto” acepta múltiples archivos.
+- Cada imagen pide autor, sube a Cloudinary y guarda URL + metadatos.
+- Carrusel elegante con selectbox y contador.
+- Botón “🗑️ Eliminar imagen” actualiza Supabase + limpia `url_imagen` legacy.
+
+## 🍽️ Panel Streamlit
+
+- Búsqueda instantánea por nombre, ingredientes o autor.
+- Expander por receta con ingredientes, pasos y fotos.
+- Sección “⚙️ Configuración” para activar/desactivar módulo de imágenes.
+- Estadísticas generales (total recetas, creadores, fotos).
+- Formularios para crear/editar/eliminar recetas manualmente.
+
+### Modo desarrollador
+
+```bash
+# Ejecuta con recarga en caliente
+poetry run streamlit run app_streamlit.py --server.runOnSave true
+
+# Modo ancho completo
+STREAMLIT_SERVER_HEADLESS=true poetry run streamlit run app_streamlit.py
+```
+
+## 🧰 Comandos útiles
+
+| Acción | Comando |
+|--------|---------|
+| Ejecutar extractor CLI | `poetry run python -m src.recetario_whatsapp.extractor --file salida.txt` |
+| Tests rápidos | `poetry run pytest` |
+| Lint (ruff) | `poetry run ruff check .` |
+| Formateo (ruff) | `poetry run ruff format .` |
+
+## 🗃️ Estructura Clave
 
 ```
 recetario-whatsapp/
-├─ 📄 setup.py              # Configuración automática
-├─ 🚀 run_app.py            # Ejecutar aplicación
-├─ 📱 app_streamlit.py      # Interfaz web principal
-├─ ⚙️ pyproject.toml        # Dependencias (Poetry)
-├─ 📚 README.md             # Esta documentación
-├─ 🔒 .env                  # Variables de entorno
-├─ 📁 src/                  # Código fuente
-│  ├─ 📄 __init__.py
-│  ├─ 🍳 recetario_whatsapp/
-│  │  ├─ 📄 __init__.py
-│  │  ├─ 🔍 extractor.py    # Procesa archivos WhatsApp
-│  │  ├─ 🤖 mistral_client.py # Cliente IA Mistral
-│  │  └─ 🗄️ supabase_utils.py # Manejo de base de datos
-├─ 📁 samples/              # Archivos de ejemplo
-├─ 📁 tests/                # Tests unitarios e integración
-├─ 📁 docs/                 # Documentación técnica
-├─ 📁 sql/                  # Scripts SQL
-└─ 🔒 .gitignore           # Archivos a ignorar en Git
+├─ app_streamlit.py        # Panel principal (galería, filtros, CRUD)
+├─ src/recetario_whatsapp/
+│  ├─ extractor.py         # Limpieza de chats y batching IA
+│  ├─ mistral_client.py    # Cliente Mistral (v1)
+│  ├─ supabase_utils.py    # SDK Supabase + almacenamiento Cloudinary
+├─ sql/
+│  ├─ migration_add_images.sql
+│  └─ rollback_migration.sql
+├─ docs/
+│  ├─ INSTALL.md
+│  └─ TROUBLESHOOTING.md
+├─ tests/
+│  └─ test_extractor.py
+└─ README.md
 ```
 
-## 🔧 Comandos Principales
+## 📸 Migraciones & Galería
 
-| Comando | Descripción |
-|---------|-------------|
-| `python setup.py` | Configura Python 3.11 + dependencias |
-| `python run_app.py` | Inicia la aplicación web |
-| `python -m pytest tests/` | Ejecuta todos los tests |
-| `python -m src.recetario_whatsapp --file archivo.txt` | Procesa un archivo de WhatsApp |
+- `sql/migration_add_images.sql`: añade columna `imagenes` (JSONB) manteniendo `url_imagen` legacy.
+- `sql/rollback_migration.sql`: reversión segura (quita galería si fuese necesario).
+- El panel detecta recetas antiguas y convierte su `url_imagen` en la primera entrada del carrusel.
 
-## 🎯 Uso
-
-### Procesar un Archivo de WhatsApp
+## 🔄 CLI de extracción
 
 ```bash
-# Procesa un archivo de chat exportado de WhatsApp
-python -m src.recetario_whatsapp.extractor --file "tu_archivo.txt"
+poetry run python -m src.recetario_whatsapp.extractor \
+  --file samples/chat.txt \
+  --output outputs/recetas.json
 ```
 
-### Usar la Interfaz Web
+- Admite parámetros de batching (`--batch-size`) y modo debug (`--debug`).
+- Los resultados se insertan desde `app_streamlit.py` o mediante scripts personalizados.
 
-```bash
-# Inicia la aplicación web
-python run_app.py
+## 🧪 Pruebas & QA
 
-# Abre http://localhost:8501 en tu navegador
-```
+- Tests unitarios con PyTest (`tests/`).
+- Scripts de verificación manual en `samples/`.
+- Se recomienda ejecutar `poetry run pytest -q` tras cambios en el extractor.
 
-## 🧪 Tests
+## 🤝 Contribución
 
-```bash
-# Ejecutar todos los tests
-python -m pytest tests/ -v
+- **Fork**, rama (`feature/nueva-feature`), PR con descripción clara.
+- Usa `poetry run ruff check` y `poetry run pytest` antes de subir.
+- Documenta cambios relevantes en el README o `docs/`.
 
-# Ejecutar test específico
-python -m pytest tests/test_extractor.py -v
+## 👨‍💻 Autor & Contacto
 
-# Test de flujo completo
-python -m pytest tests/test_flujo_completo.py -v
-```
+**Nombre:** [Tu Nombre Aquí]  
+**Email:** [tu.email@ejemplo.com]  
+**GitHub:** [@tu-usuario-github](https://github.com/tu-usuario-github)  
+**LinkedIn:** [Tu Perfil LinkedIn](https://linkedin.com/in/tu-perfil)  
+**WhatsApp Grupo:** [Enlace al grupo si aplica]
 
-## 📊 Optimización
+> 💬 Para soporte o colaboraciones, envía un email o abre un issue en GitHub.
 
-### Rendimiento:
-- ✅ **Bloques de 15K tokens** (vs 1K antes)
-- ✅ **Múltiples recetas** por llamada API
-- ✅ **Reducción 80%** en llamadas API
-- ✅ **Mistral Small** (eficiente y económico)
+## 📄 Licencia & Créditos
 
-### Costo:
-- ✅ **80% más económico** que el procesamiento individual
-- ✅ **Fallback automático** si la IA falla
-- ✅ **Context window 32K** tokens
-
-## 🐛 Problemas Comunes
-
-| Error | Solución | Documentación |
-|-------|----------|---------------|
-| `ModuleNotFoundError: mistralai` | Actualizar API v0 → v1 | `docs/SOLUCION_MISTRALAI.md` |
-| `Respuesta no válida de Mistral` | Prompt simplificado | `docs/SOLUCION_MISTRAL_ERROR.md` |
-| `Mistral object has no attribute '_client'` | Context manager | `docs/SOLUCION_MISTRAL_API.md` |
-
-## 📚 Documentación Técnica
-
-Consulta la carpeta [`docs/`](docs/) para:
-- ✅ Guías de solución de problemas
-- ✅ Configuración paso a paso
-- ✅ Optimizaciones implementadas
-- ✅ Troubleshooting específico
-
-## 🤝 Contribuir
-
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
-## 📄 Licencia
-
-Este proyecto está bajo la Licencia MIT. Ver [`LICENSE`](LICENSE) para más detalles.
-
-## 🙋‍♂️ Soporte
-
-- 📖 **Documentación:** [`docs/`](docs/)
-- 🐛 **Issues:** [GitHub Issues](https://github.com/tu-usuario/recetario-whatsapp/issues)
-- 💬 **Discusiones:** [GitHub Discussions](https://github.com/tu-usuario/recetario-whatsapp/discussions)
+- MIT License (ver `LICENSE`).
+- Stack: Python 3.11, Streamlit, Mistral, Supabase, Cloudinary, Poetry.
+- UI inspirada en el catálogo original del grupo de WhatsApp 🧡
 
 ---
 
-**⭐ Si te gusta este proyecto, dale una estrella en GitHub!**
-
-*Versión 0.1.0 - Optimizado y simplificado* ✨
+**¿Te resultó útil?** ¡Dale ⭐️ en GitHub y comparte tus recetas!

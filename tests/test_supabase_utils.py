@@ -9,7 +9,7 @@ from src.recetario_whatsapp.supabase_utils import SupabaseManager
 class TestSupabaseManager:
     """Tests para la clase SupabaseManager."""
     
-    def test_init_success(self, mock_env_vars):
+    def test_init_success(self, mock_env_vars, mock_cloudinary):
         """Test inicialización exitosa del manager."""
         with patch('src.recetario_whatsapp.supabase_utils.create_client') as mock_create:
             mock_client = Mock()
@@ -34,7 +34,7 @@ class TestSupabaseManager:
                 SupabaseManager()
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_insertar_receta_success(self, mock_create, mock_env_vars, sample_receta_data):
+    def test_insertar_receta_success(self, mock_create, mock_env_vars, mock_cloudinary, sample_receta_data):
         """Test inserción exitosa de receta."""
         mock_client = Mock()
         mock_response = Mock()
@@ -49,7 +49,7 @@ class TestSupabaseManager:
         mock_client.table.assert_called_once_with('recetas')
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_insertar_receta_error(self, mock_create, mock_env_vars, sample_receta_data):
+    def test_insertar_receta_error(self, mock_create, mock_env_vars, mock_cloudinary, sample_receta_data):
         """Test inserción con error."""
         mock_client = Mock()
         mock_client.table.return_value.insert.return_value.execute.side_effect = Exception("Error de DB")
@@ -61,7 +61,7 @@ class TestSupabaseManager:
         assert resultado is None
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_obtener_recetas_success(self, mock_create, mock_env_vars, sample_receta_data):
+    def test_obtener_recetas_success(self, mock_create, mock_env_vars, mock_cloudinary, sample_receta_data):
         """Test obtención exitosa de recetas."""
         mock_client = Mock()
         mock_response = Mock()
@@ -76,7 +76,7 @@ class TestSupabaseManager:
         mock_client.table.assert_called_once_with('recetas')
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_obtener_recetas_con_filtro(self, mock_create, mock_env_vars, sample_receta_data):
+    def test_obtener_recetas_con_filtro(self, mock_create, mock_env_vars, mock_cloudinary, sample_receta_data):
         """Test obtención de recetas con filtro de creador."""
         mock_client = Mock()
         mock_response = Mock()
@@ -91,7 +91,7 @@ class TestSupabaseManager:
         mock_client.table.assert_called_once_with('recetas')
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_obtener_recetas_error(self, mock_create, mock_env_vars):
+    def test_obtener_recetas_error(self, mock_create, mock_env_vars, mock_cloudinary):
         """Test obtención de recetas con error."""
         mock_client = Mock()
         mock_client.table.return_value.select.return_value.order.return_value.execute.side_effect = Exception("Error de DB")
@@ -103,7 +103,7 @@ class TestSupabaseManager:
         assert resultado == []
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_buscar_recetas_success(self, mock_create, mock_env_vars, sample_receta_data):
+    def test_buscar_recetas_success(self, mock_create, mock_env_vars, mock_cloudinary, sample_receta_data):
         """Test búsqueda exitosa de recetas."""
         mock_client = Mock()
         mock_response = Mock()
@@ -118,7 +118,7 @@ class TestSupabaseManager:
         mock_client.table.assert_called_once_with('recetas')
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_buscar_recetas_error(self, mock_create, mock_env_vars):
+    def test_buscar_recetas_error(self, mock_create, mock_env_vars, mock_cloudinary):
         """Test búsqueda con error."""
         mock_client = Mock()
         mock_client.table.return_value.select.return_value.or_.return_value.order.return_value.execute.side_effect = Exception("Error de DB")
@@ -130,7 +130,7 @@ class TestSupabaseManager:
         assert resultado == []
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_actualizar_receta_success(self, mock_create, mock_env_vars):
+    def test_actualizar_receta_success(self, mock_create, mock_env_vars, mock_cloudinary):
         """Test actualización exitosa de receta."""
         mock_client = Mock()
         mock_response = Mock()
@@ -145,7 +145,7 @@ class TestSupabaseManager:
         mock_client.table.assert_called_once_with('recetas')
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_actualizar_receta_error(self, mock_create, mock_env_vars):
+    def test_actualizar_receta_error(self, mock_create, mock_env_vars, mock_cloudinary):
         """Test actualización con error."""
         mock_client = Mock()
         mock_client.table.return_value.update.return_value.eq.return_value.execute.side_effect = Exception("Error de DB")
@@ -157,7 +157,7 @@ class TestSupabaseManager:
         assert resultado is False
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_eliminar_receta_success(self, mock_create, mock_env_vars):
+    def test_eliminar_receta_success(self, mock_create, mock_env_vars, mock_cloudinary):
         """Test eliminación exitosa de receta."""
         mock_client = Mock()
         mock_response = Mock()
@@ -172,7 +172,7 @@ class TestSupabaseManager:
         mock_client.table.assert_called_once_with('recetas')
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_eliminar_receta_error(self, mock_create, mock_env_vars):
+    def test_eliminar_receta_error(self, mock_create, mock_env_vars, mock_cloudinary):
         """Test eliminación con error."""
         mock_client = Mock()
         mock_client.table.return_value.delete.return_value.eq.return_value.execute.side_effect = Exception("Error de DB")
@@ -184,7 +184,7 @@ class TestSupabaseManager:
         assert resultado is False
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_subir_imagen_success(self, mock_create, mock_env_vars):
+    def test_subir_imagen_success(self, mock_create, mock_env_vars, mock_cloudinary):
         """Test subida exitosa de imagen."""
         mock_client = Mock()
         mock_client.storage.from_.return_value.upload.return_value = True
@@ -198,7 +198,7 @@ class TestSupabaseManager:
         mock_client.storage.from_.assert_called_with('test-recetas')
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_subir_imagen_error(self, mock_create, mock_env_vars):
+    def test_subir_imagen_error(self, mock_create, mock_env_vars, mock_cloudinary):
         """Test subida de imagen con error."""
         mock_client = Mock()
         mock_client.storage.from_.return_value.upload.side_effect = Exception("Error de storage")
@@ -210,7 +210,7 @@ class TestSupabaseManager:
         assert resultado is None
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_obtener_creadores_unicos_success(self, mock_create, mock_env_vars):
+    def test_obtener_creadores_unicos_success(self, mock_create, mock_env_vars, mock_cloudinary):
         """Test obtención exitosa de creadores únicos."""
         mock_client = Mock()
         mock_response = Mock()
@@ -230,7 +230,7 @@ class TestSupabaseManager:
         assert len(resultado) == 3  # Sin duplicados
     
     @patch('src.recetario_whatsapp.supabase_utils.create_client')
-    def test_obtener_creadores_unicos_error(self, mock_create, mock_env_vars):
+    def test_obtener_creadores_unicos_error(self, mock_create, mock_env_vars, mock_cloudinary):
         """Test obtención de creadores con error."""
         mock_client = Mock()
         mock_client.table.return_value.select.return_value.execute.side_effect = Exception("Error de DB")
@@ -240,3 +240,4 @@ class TestSupabaseManager:
         resultado = manager.obtener_creadores_unicos()
         
         assert resultado == []
+

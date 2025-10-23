@@ -8,3 +8,4 @@ CREATE TABLE IF NOT EXISTS recetas (
   url_imagen TEXT,
   fecha_mensaje TIMESTAMP WITH TIME ZONE
 );
+

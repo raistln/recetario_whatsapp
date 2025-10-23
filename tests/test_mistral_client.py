@@ -127,3 +127,4 @@ class TestMistralClient:
         
         assert resultado["tiene_foto"] is True
         assert resultado["es_receta"] is True
+

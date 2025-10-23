@@ -1,10 +1,13 @@
 """
 Utilidades para interactuar con Supabase.
 """
+import io
 import os
 from typing import List, Dict, Any, Optional
 from supabase import create_client, Client
 from datetime import datetime
+from cloudinary import config as cloudinary_config
+from cloudinary.uploader import upload as cloudinary_upload
 
 
 class SupabaseManager:
@@ -20,6 +23,23 @@ class SupabaseManager:
         
         self.client: Client = create_client(url, key)
         self.storage_bucket = os.getenv('SUPABASE_STORAGE_BUCKET', 'recetas')
+
+        cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME')
+        api_key = os.getenv('CLOUDINARY_API_KEY')
+        api_secret = os.getenv('CLOUDINARY_API_SECRET')
+
+        if not cloud_name or not api_key or not api_secret:
+            raise ValueError(
+                "CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY y CLOUDINARY_API_SECRET deben estar configuradas"
+            )
+
+        self.cloudinary_folder = os.getenv('CLOUDINARY_FOLDER')
+        cloudinary_config(
+            cloud_name=cloud_name,
+            api_key=api_key,
+            api_secret=api_secret,
+            secure=True,
+        )
     
     def insertar_receta(self, receta: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -49,6 +69,10 @@ class SupabaseManager:
                     return existe.data[0]
 
             # Preparar los datos para inserción
+            imagenes = receta.get('imagenes')
+            if imagenes is None:
+                imagenes = []
+
             datos_receta = {
                 'creador': receta.get('creador'),
                 'nombre_receta': receta.get('nombre_receta'),
@@ -56,7 +80,8 @@ class SupabaseManager:
                 'pasos_preparacion': receta.get('pasos_preparacion'),
                 'tiene_foto': receta.get('tiene_foto', False),
                 'url_imagen': receta.get('url_imagen'),
-                'fecha_mensaje': receta.get('fecha_mensaje')
+                'fecha_mensaje': receta.get('fecha_mensaje'),
+                'imagenes': imagenes
             }
             
             response = self.client.table('recetas').insert(datos_receta).execute()
@@ -128,6 +153,9 @@ class SupabaseManager:
             True si se actualizó correctamente, False en caso contrario
         """
         try:
+            if 'imagenes' in datos_actualizacion and datos_actualizacion['imagenes'] is None:
+                datos_actualizacion['imagenes'] = []
+
             response = self.client.table('recetas').update(datos_actualizacion).eq('id', receta_id).execute()
             return len(response.data) > 0
             
@@ -153,33 +181,43 @@ class SupabaseManager:
             print(f"Error eliminando receta: {e}")
             return False
     
-    def subir_imagen(self, archivo_bytes: bytes, nombre_archivo: str) -> Optional[str]:
+    def subir_imagen(self, archivo_bytes: bytes, nombre_archivo: str) -> Optional[Dict[str, Any]]:
         """
-        Sube una imagen al storage de Supabase.
+        Sube una imagen a Cloudinary.
         
         Args:
             archivo_bytes: Bytes del archivo de imagen
             nombre_archivo: Nombre del archivo
             
         Returns:
-            URL de la imagen subida o None si hay error
+            Diccionario con información de la imagen subida o None si hay error
         """
         try:
-            # Generar nombre único para evitar conflictos
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            nombre_unico = f"{timestamp}_{nombre_archivo}"
-            
-            response = self.client.storage.from_(self.storage_bucket).upload(
-                nombre_unico, 
-                archivo_bytes
-            )
-            
-            if response:
-                # Obtener URL pública
-                url = self.client.storage.from_(self.storage_bucket).get_public_url(nombre_unico)
-                return url
+            buffer = io.BytesIO(archivo_bytes)
+            buffer.seek(0)
+
+            upload_options: Dict[str, Any] = {
+                'resource_type': 'image',
+                'use_filename': True,
+                'unique_filename': True,
+                'overwrite': False,
+            }
+
+            if self.cloudinary_folder:
+                upload_options['folder'] = self.cloudinary_folder
+
+            response = cloudinary_upload(buffer, **upload_options)
+
+            if response and response.get('secure_url'):
+                return {
+                    'url': response.get('secure_url'),
+                    'public_id': response.get('public_id'),
+                    'version': response.get('version'),
+                    'format': response.get('format'),
+                    'original_filename': response.get('original_filename') or nombre_archivo,
+                }
             return None
-            
+
         except Exception as e:
             print(f"Error subiendo imagen: {e}")
             return None
@@ -227,3 +265,4 @@ class SupabaseManager:
         except Exception as e:
             print(f"Error obteniendo estado de Supabase: {e}")
             return None
+

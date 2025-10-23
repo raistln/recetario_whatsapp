@@ -282,3 +282,4 @@ REGLAS CRÍTICAS:
 - Si hay "<adjunto:" o "imagen" marca "tiene_foto": true
 - Si no hay recetas válidas (sin ingredientes): {"recetas": []}
 - NO agregues texto fuera del JSON"""
+

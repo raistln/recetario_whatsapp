@@ -139,3 +139,4 @@ def test_nueva_funcionalidad(self, mock_env_vars):
 - **Tests de integración**: Para flujos completos
 - **Manejo de errores**: Todos los casos de error cubiertos
 - **Casos edge**: Escenarios límite probados
+

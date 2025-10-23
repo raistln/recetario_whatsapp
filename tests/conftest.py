@@ -16,11 +16,31 @@ def mock_env_vars():
         'MISTRAL_API_KEY': 'test_mistral_key',
         'SUPABASE_URL': 'https://test.supabase.co',
         'SUPABASE_KEY': 'test_supabase_key',
-        'SUPABASE_STORAGE_BUCKET': 'test-recetas'
+        'SUPABASE_STORAGE_BUCKET': 'test-recetas',
+        'CLOUDINARY_CLOUD_NAME': 'test-cloud',
+        'CLOUDINARY_API_KEY': 'test-api-key',
+        'CLOUDINARY_API_SECRET': 'test-api-secret',
+        'CLOUDINARY_FOLDER': 'test-folder'
     }
     
     with patch.dict(os.environ, env_vars):
         yield env_vars
+
+
+@pytest.fixture
+def mock_cloudinary():
+    """Fixture para mockear configuración y subida de Cloudinary."""
+    with patch('src.recetario_whatsapp.supabase_utils.cloudinary_config') as mock_config, \
+            patch('src.recetario_whatsapp.supabase_utils.cloudinary_upload') as mock_upload:
+        mock_config.return_value = None
+        mock_upload.return_value = {
+            'secure_url': 'https://test.com/image.jpg',
+            'public_id': 'test_public_id',
+            'version': '123',
+            'format': 'jpg',
+            'original_filename': 'test'
+        }
+        yield mock_upload
 
 @pytest.fixture
 def mock_mistral_response():
@@ -73,3 +93,4 @@ def mock_supabase_client():
     mock_client.storage.from_.return_value.upload.return_value = True
     mock_client.storage.from_.return_value.get_public_url.return_value = 'https://test.com/image.jpg'
     return mock_client
+

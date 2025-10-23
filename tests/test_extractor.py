@@ -265,3 +265,4 @@ class TestWhatsAppExtractor:
             
             mock_dotenv.assert_called_once()
             mock_extractor.procesar_archivo.assert_called_once_with('test.txt', None)
+

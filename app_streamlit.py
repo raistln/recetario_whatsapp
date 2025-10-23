@@ -62,6 +62,10 @@ def main():
         st.error("No se pudieron inicializar los servicios necesarios. Verifica la configuración.")
         return
     
+    def mantener_expander_abierto(clave_estado: str) -> None:
+        """Marca un expander como abierto en session_state."""
+        st.session_state[clave_estado] = True
+
     # Sidebar para filtros y búsqueda
     with st.sidebar:
         st.header("🔍 Filtros y Búsqueda")
@@ -80,7 +84,7 @@ def main():
         # Opción para desactivar imágenes
         imagenes_habilitadas = st.checkbox(
             "📷 Habilitar módulo de imágenes",
-            value=False,
+            value=True,
             help="Activa solo si quieres gestionar fotos de recetas"
         )
         
@@ -205,7 +209,18 @@ def main():
         return
     
     for i, receta in enumerate(recetas):
-        with st.expander(f"🍽️ {receta.get('nombre_receta', 'Receta sin nombre')} - {receta['creador']}"):
+        # Inicializar key para resetear uploader
+        if f'upload_key_{i}' not in st.session_state:
+            st.session_state[f'upload_key_{i}'] = 0
+
+        expander_state_key = f'expander_abierto_{receta["id"]}'
+        if expander_state_key not in st.session_state:
+            st.session_state[expander_state_key] = False
+
+        with st.expander(
+            f"🍽️ {receta.get('nombre_receta', 'Receta sin nombre')} - {receta['creador']}",
+            expanded=st.session_state[expander_state_key]
+        ):
             col1, col2 = st.columns([2, 1])
             
             with col1:
@@ -227,50 +242,142 @@ def main():
                         st.caption(f"📅 Fecha: {receta['fecha_mensaje'][:10]}")
             
             with col2:
-                # Mostrar imagen solo si está habilitado
+                # Mostrar imágenes solo si está habilitado
                 if imagenes_habilitadas:
-                    if receta.get('url_imagen'):
-                        try:
-                            st.image(receta['url_imagen'], caption="Foto de la receta")
-                        except:
-                            st.info("Error cargando imagen")
+                    imagenes_receta = receta.get('imagenes') or []
+
+                    # Compatibilidad con recetas antiguas que solo tienen url_imagen
+                    if not imagenes_receta and receta.get('url_imagen'):
+                        imagenes_receta = [{'url': receta['url_imagen'], 'autor': receta.get('creador')}]
+
+                    if imagenes_receta:
+                        total_imagenes = len(imagenes_receta)
+                        
+                        # Usar session_state para el índice del carrusel
+                        carousel_key = f"carousel_{receta['id']}"
+                        if carousel_key not in st.session_state:
+                            st.session_state[carousel_key] = 0
+                        
+                        indice = st.session_state[carousel_key]
+                        
+                        # Controles del carrusel solo si hay múltiples imágenes
+                        if total_imagenes > 1:
+                            st.markdown("### 🖼️ Galería de Fotos")
+                            
+                            # Selectbox elegante con labels personalizados
+                            opciones_imagenes = [f"📸 Imagen {j+1}" for j in range(total_imagenes)]
+                            imagen_seleccionada_option = st.selectbox(
+                                "Seleccionar imagen:",
+                                options=opciones_imagenes,
+                                index=indice,
+                                key=f"select_{receta['id']}",
+                                help="Elige la imagen a mostrar",
+                                on_change=mantener_expander_abierto,
+                                kwargs={"clave_estado": expander_state_key}
+                            )
+                            
+                            # Actualizar índice basado en la selección
+                            indice = opciones_imagenes.index(imagen_seleccionada_option)
+                            st.session_state[carousel_key] = indice
+                            st.session_state[expander_state_key] = True
+                            
+                            st.markdown("---")
+                        
+                        imagen_seleccionada = imagenes_receta[indice]
+                        autor = imagen_seleccionada.get('autor') or "Autor desconocido"
+                        
+                        # Mostrar imagen con mejor formato
+                        st.image(
+                            imagen_seleccionada.get('url'),
+                            caption=f"📸 Autor: {autor} | 📍 {indice + 1} de {total_imagenes}",
+                            width='stretch'
+                        )
+                        
+                        if st.button("🗑️ Eliminar imagen", key=f"delete_image_{i}_{indice}"):
+                            imagenes_actualizadas = [img for img in imagenes_receta if img != imagen_seleccionada]
+                            datos_actualizacion = {
+                                'imagenes': imagenes_actualizadas,
+                                'tiene_foto': len(imagenes_actualizadas) > 0
+                            }
+                            
+                            # Si no quedan imágenes, quitar url_imagen
+                            if not imagenes_actualizadas:
+                                datos_actualizacion['url_imagen'] = None
+                            # Si se eliminó la primera imagen, actualizar url_imagen
+                            elif receta.get('url_imagen') and imagen_seleccionada.get('url') == receta['url_imagen']:
+                                datos_actualizacion['url_imagen'] = imagenes_actualizadas[0].get('url') if imagenes_actualizadas else None
+                            
+                            st.session_state[expander_state_key] = True
+
+                            if supabase_manager.actualizar_receta(receta['id'], datos_actualizacion):
+                                st.success("Imagen eliminada")
+                                st.rerun()
+                            else:
+                                st.error("Error eliminando imagen")
                     elif receta.get('tiene_foto'):
                         st.info("📷 Foto pendiente")
                     else:
                         st.info("📷 Sin foto")
                     
-                    # Subir nueva imagen
+                    # Subir nueva imagen - ABAJO
                     st.subheader("📸 Subir Foto")
-                    nueva_imagen = st.file_uploader(
-                        "Seleccionar imagen",
+                    nuevas_imagenes = st.file_uploader(
+                        "Seleccionar imágenes",
                         type=['jpg', 'jpeg', 'png'],
-                        key=f"upload_{i}"
+                        accept_multiple_files=True,
+                        key=f"upload_{i}_{st.session_state[f'upload_key_{i}']}"
                     )
-                    
-                    if nueva_imagen:
-                        if st.button(f"Subir Imagen", key=f"upload_btn_{i}"):
-                            with st.spinner("Subiendo imagen..."):
-                                # Convertir a bytes
-                                img_bytes = nueva_imagen.read()
-                                
-                                # Subir a Supabase
-                                url_imagen = supabase_manager.subir_imagen(
-                                    img_bytes, 
-                                    nueva_imagen.name
-                                )
-                                
-                                if url_imagen:
-                                    # Actualizar receta
-                                    if supabase_manager.actualizar_receta(
-                                        receta['id'], 
-                                        {'url_imagen': url_imagen, 'tiene_foto': True}
-                                    ):
-                                        st.success("Imagen subida correctamente")
-                                        st.rerun()
+
+                    autores_imagenes = []
+                    if nuevas_imagenes:
+                        st.caption("✍️ Indica el autor de cada imagen")
+                        for idx, archivo in enumerate(nuevas_imagenes):
+                            autor = st.text_input(
+                                f"Autor para {archivo.name}",
+                                key=f"autor_imagen_{i}_{idx}_{st.session_state[f'upload_key_{i}']}"
+                            )
+                            autores_imagenes.append(autor)
+
+                        if st.button("Subir imágenes", key=f"upload_btn_{i}"):
+                            imagenes_subidas = []
+                            with st.spinner("Subiendo imágenes..."):
+                                for idx, archivo in enumerate(nuevas_imagenes):
+                                    archivo.seek(0)
+                                    info_imagen = supabase_manager.subir_imagen(
+                                        archivo.read(),
+                                        archivo.name
+                                    )
+
+                                    if info_imagen:
+                                        autor = (autores_imagenes[idx] or "Autor desconocido").strip()
+                                        if not autor:
+                                            autor = "Autor desconocido"
+
+                                        info_imagen['autor'] = autor
+                                        info_imagen['uploaded_at'] = datetime.utcnow().isoformat()
+                                        imagenes_subidas.append(info_imagen)
                                     else:
-                                        st.error("Error actualizando receta")
+                                        st.error(f"Error subiendo la imagen {archivo.name}")
+
+                            if imagenes_subidas:
+                                imagenes_actualizadas = (receta.get('imagenes') or []) + imagenes_subidas
+                                datos_actualizacion = {
+                                    'imagenes': imagenes_actualizadas,
+                                    'tiene_foto': True
+                                }
+
+                                # Mantener compatibilidad con url_imagen para la primera imagen
+                                if not receta.get('url_imagen') and imagenes_actualizadas:
+                                    datos_actualizacion['url_imagen'] = imagenes_actualizadas[0].get('url')
+
+                                st.session_state[expander_state_key] = True
+
+                                if supabase_manager.actualizar_receta(receta['id'], datos_actualizacion):
+                                    st.success("Imágenes subidas correctamente")
+                                    st.session_state[f'upload_key_{i}'] += 1  # Resetear formulario
+                                    st.rerun()
                                 else:
-                                    st.error("Error subiendo imagen")
+                                    st.error("Error actualizando la receta")
                 else:
                     st.info("📷 Módulo de imágenes desactivado")
             
@@ -279,10 +386,12 @@ def main():
             
             with col_btn1:
                 if st.button(f"✏️ Editar", key=f"edit_{i}"):
+                    st.session_state[expander_state_key] = True
                     st.session_state[f'editando_{i}'] = True
             
             with col_btn2:
                 if st.button(f"🗑️ Eliminar", key=f"delete_{i}"):
+                    st.session_state[expander_state_key] = True
                     if supabase_manager.eliminar_receta(receta['id']):
                         st.success("Receta eliminada")
                         st.rerun()
@@ -334,6 +443,7 @@ def main():
                             }
                             
                             if supabase_manager.actualizar_receta(receta['id'], datos_actualizacion):
+                                st.session_state[expander_state_key] = True
                                 st.success("Receta actualizada")
                                 st.session_state[f'editando_{i}'] = False
                                 st.rerun()
@@ -343,6 +453,7 @@ def main():
                     with col_cancel:
                         if st.form_submit_button("❌ Cancelar"):
                             st.session_state[f'editando_{i}'] = False
+                            st.session_state[expander_state_key] = False
                             st.rerun()
             
             st.markdown("---")
