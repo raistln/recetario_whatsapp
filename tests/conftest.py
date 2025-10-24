@@ -79,7 +79,14 @@ def sample_receta_data():
         'pasos_preparacion': '1. Mezclar todo.\n2. Hornear 30 min.',
         'tiene_foto': False,
         'url_imagen': None,
-        'fecha_mensaje': '2025-10-12T14:21:32+02:00'
+        'fecha_mensaje': '2025-10-12T14:21:32+02:00',
+        'imagenes': [
+            {
+                'url': 'https://test.com/image.jpg',
+                'autor': 'Ana',
+                'uploaded_at': '2025-10-12T14:21:32+02:00'
+            }
+        ]
     }
 
 @pytest.fixture

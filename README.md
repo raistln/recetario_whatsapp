@@ -144,11 +144,11 @@ poetry run python -m src.recetario_whatsapp.extractor \
 
 ## 👨‍💻 Autor & Contacto
 
-**Nombre:** [Tu Nombre Aquí]  
-**Email:** [tu.email@ejemplo.com]  
-**GitHub:** [@tu-usuario-github](https://github.com/tu-usuario-github)  
-**LinkedIn:** [Tu Perfil LinkedIn](https://linkedin.com/in/tu-perfil)  
-**WhatsApp Grupo:** [Enlace al grupo si aplica]
+**Nombre:** [Samuel Martín]  
+**Email:** [samumarfon@gmail.com]  
+**GitHub:** [@raistln](https://github.com/raistln)  
+**LinkedIn:** [Samuel Martín](https://www.linkedin.com/in/samuel-mart%C3%ADn-fonseca-74014b17/)  
+
 
 > 💬 Para soporte o colaboraciones, envía un email o abre un issue en GitHub.
 
