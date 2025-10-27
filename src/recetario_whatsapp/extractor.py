@@ -5,20 +5,513 @@ import re
 import json
 import os
 import argparse
+import unicodedata
 from datetime import datetime
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Set
+
+from openpyxl import load_workbook
 from .mistral_client import MistralClient
 from .supabase_utils import SupabaseManager
+
+# Importar pandas y openpyxl para procesamiento de Excel
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    PANDAS_AVAILABLE = False
+    print("Warning: pandas not available. Excel processing will not work.")
+
+
+class ExcelExtractor:
+    """Extractor de recetas desde archivos Excel."""
+
+    def __init__(self, supabase_manager: SupabaseManager):
+        """Inicializa el extractor de Excel."""
+        self.supabase_manager = supabase_manager
+        self.existing_keys: Set[Tuple[str, str]] = set()
+        self.nuevas_claves: Set[Tuple[str, str]] = set()
+        self.creador_aliases = {
+            # Alias comunes para evitar duplicados por variaciones de nombre
+            'carlitos': 'carlos',
+        }
+        self._refrescar_claves_existentes()
+
+    def procesar_excel(self, ruta_archivo: str) -> Dict[str, Any]:
+        """
+        Procesa un archivo Excel y extrae recetas.
+
+        Args:
+            ruta_archivo: Ruta al archivo Excel
+
+        Returns:
+            Diccionario con estadísticas del procesamiento
+        """
+        if not PANDAS_AVAILABLE:
+            return {"error": "pandas not available. Install with: pip install pandas openpyxl"}
+
+        print(f"Procesando archivo Excel: {ruta_archivo}")
+
+        # Refrescar deduplicación y limpiar cache por ejecución
+        self._refrescar_claves_existentes()
+        self.nuevas_claves.clear()
+
+        try:
+            # Leer todas las hojas del Excel (datos tabulares)
+            excel_data = pd.read_excel(ruta_archivo, sheet_name=None)
+            # Cargar workbook con openpyxl para inspeccionar imágenes embebidas
+            workbook = load_workbook(ruta_archivo, data_only=True)
+            print(f"Encontradas {len(excel_data)} hojas")
+
+            recetas_extraidas = 0
+            recetas_insertadas = 0
+            hojas_procesadas = 0
+
+            # Procesar cada hoja
+            for sheet_name, sheet_data in excel_data.items():
+                print(f"Procesando hoja: {sheet_name}")
+                hojas_procesadas += 1
+
+                # Extraer recetas de esta hoja
+                imagenes_por_fila, imagenes_sin_posicion = self._obtener_imagenes_embebidas(
+                    workbook, sheet_name
+                )
+                resultado_hoja = self._extraer_recetas_de_hoja(
+                    sheet_data,
+                    sheet_name,
+                    imagenes_por_fila,
+                    imagenes_sin_posicion,
+                )
+
+                recetas_extraidas += resultado_hoja['recetas_extraidas']
+                recetas_insertadas += resultado_hoja['recetas_insertadas']
+
+                print(f"  Hoja '{sheet_name}': {resultado_hoja['recetas_extraidas']} recetas extraídas, {resultado_hoja['recetas_insertadas']} insertadas")
+
+            return {
+                "hojas_procesadas": hojas_procesadas,
+                "recetas_extraidas": recetas_extraidas,
+                "recetas_insertadas": recetas_insertadas,
+                "archivo_tipo": "excel"
+            }
+
+        except Exception as e:
+            print(f"Error procesando Excel: {e}")
+            return {"error": str(e)}
+
+    def _extraer_recetas_de_hoja(
+        self,
+        hoja_data: pd.DataFrame,
+        hoja_name: str,
+        imagenes_por_fila: Dict[int, List[Dict[str, Any]]],
+        imagenes_sin_posicion: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Extrae recetas de una hoja específica del Excel.
+
+        Args:
+            hoja_data: DataFrame con los datos de la hoja
+            hoja_name: Nombre de la hoja
+
+        Returns:
+            Diccionario con estadísticas de la hoja
+        """
+        recetas_extraidas = 0
+        recetas_insertadas = 0
+
+        hoja_data = hoja_data.fillna('')
+        columnas_originales = [str(col) if col is not None else '' for col in hoja_data.columns]
+        hoja_data.columns = [col.strip() for col in columnas_originales]
+
+        # Si no hay filas pero sí columnas con datos, crear una fila sintética a partir de los encabezados
+        if hoja_data.empty and any(col.strip() for col in hoja_data.columns):
+            fila_sintetica = {col: col for col in hoja_data.columns}
+            hoja_data = pd.DataFrame([fila_sintetica])
+
+        columnas = list(hoja_data.columns)
+
+        # Buscar recetas en la hoja
+        # El nombre de la receta debe estar en la primera columna
+        # Los ingredientes y preparación en las columnas siguientes
+
+        for idx, (row_idx, row) in enumerate(hoja_data.iterrows()):
+            # Obtener el nombre de la receta de la primera columna
+            nombre_receta = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ''
+
+            # Saltar filas vacías o que empiecen con texto de encabezado
+            if not nombre_receta or self._es_encabezado(nombre_receta):
+                continue
+
+            # Verificar que no sea un link o imagen (según la solicitud del usuario)
+            if self._es_link_o_imagen(row):
+                print(f"  ⚠️ Saltando fila {idx+1}: parece ser un link o imagen")
+                continue
+
+            creador = self._obtener_creador(row, columnas, hoja_name)
+            clave_normalizada = (self._normalizar_texto(creador), self._normalizar_texto(nombre_receta))
+
+            if clave_normalizada in self.existing_keys or clave_normalizada in self.nuevas_claves:
+                print(f"  ⚠️ Receta duplicada detectada: '{nombre_receta}' de {creador}. Saltando.")
+                continue
+
+            # Extraer ingredientes y preparación de las columnas siguientes
+            ingredientes = self._extraer_ingredientes(row, columnas)
+            preparacion = self._extraer_preparacion(row, columnas)
+            imagenes = self._extraer_imagenes_por_valor(row, columnas, creador)
+
+            # Adjuntar imágenes embebidas en el Excel si existen
+            imagenes_receta = imagenes.copy()
+            imagenes_embebidas = self._resolver_imagenes_embebidas(
+                imagenes_por_fila, imagenes_sin_posicion, row_idx, nombre_receta, creador
+            )
+            if imagenes_embebidas:
+                imagenes_receta.extend(imagenes_embebidas)
+
+            # Si no hay ingredientes, saltar esta fila
+            if not ingredientes:
+                continue
+
+            # Crear receta
+            receta = {
+                'creador': creador,
+                'nombre_receta': nombre_receta,
+                'ingredientes': ingredientes,
+                'pasos_preparacion': preparacion if preparacion else None,
+                'tiene_foto': bool(imagenes_receta),
+                'fecha_mensaje': datetime.now().isoformat(),
+                'imagenes': imagenes_receta,
+                'url_imagen': imagenes_receta[0]['url'] if imagenes_receta else None,
+            }
+
+            # Insertar en la base de datos
+            if self.supabase_manager.insertar_receta(receta):
+                recetas_insertadas += 1
+                self.nuevas_claves.add(clave_normalizada)
+                self.existing_keys.add(clave_normalizada)
+                print(f"  ✅ Receta '{nombre_receta}' insertada")
+            else:
+                print(f"  ❌ Error insertando receta '{nombre_receta}'")
+
+            recetas_extraidas += 1
+
+        return {
+            'recetas_extraidas': recetas_extraidas,
+            'recetas_insertadas': recetas_insertadas
+        }
+
+    def _es_encabezado(self, texto: str) -> bool:
+        """Determina si el texto parece ser un encabezado."""
+        texto_lower = texto.lower()
+        encabezados = [
+            'ingredientes', 'preparación', 'pasos', 'método', 'receta',
+            'preparacion', 'metodología', 'instrucciones', 'elaboración'
+        ]
+        return any(encabezado in texto_lower for encabezado in encabezados)
+
+    def _es_link_o_imagen(self, row: pd.Series) -> bool:
+        """Determina si la fila completa solo contiene un link o imagen (sin título)."""
+        valores_texto = [str(value).strip() for value in row if pd.notna(value) and str(value).strip()]
+        if not valores_texto:
+            return False
+
+        # Si solo hay una celda y parece URL/imagen, considerarlo fila vacía
+        if len(valores_texto) == 1:
+            return self._es_url(valores_texto[0])
+
+        # Si hay múltiples celdas, no bloquear toda la fila; la detección se hará por célula
+        return False
+
+    def _obtener_creador(self, row: pd.Series, columns: List[str], hoja_name: str) -> str:
+        """Determina el creador de la receta."""
+        for col_name in columns:
+            col_lower = col_name.lower()
+            if any(palabra in col_lower for palabra in ['autor', 'creador']):
+                value = row[col_name]
+                if pd.notna(value) and str(value).strip():
+                    return self._aplicar_alias_creador(str(value).strip())
+
+        # Si no hay columna específica, usar el nombre de la hoja como creador
+        if hoja_name:
+            return self._aplicar_alias_creador(hoja_name.strip())
+
+        return 'Excel Import'
+
+    def _extraer_ingredientes(self, row: pd.Series, columns: List[str]) -> str:
+        """Extrae los ingredientes de una fila."""
+        ingredientes = []
+
+        # Buscar en columnas que contengan "ingredientes" en el nombre
+        for col_name in columns:
+            if 'ingredientes' in col_name.lower():
+                value = row[col_name]
+                if pd.notna(value) and str(value).strip():
+                    ingredientes.append(str(value).strip())
+
+        # Si no encontró columna específica, usar la segunda columna
+        if not ingredientes and len(columns) > 1:
+            value = row.iloc[1]
+            if pd.notna(value) and str(value).strip():
+                ingredientes.append(str(value).strip())
+
+        # Si aún no hay ingredientes pero hay más columnas, buscar en la tercera
+        if not ingredientes and len(columns) > 2:
+            value = row.iloc[2]
+            if pd.notna(value) and str(value).strip() and not self._es_url(str(value)):
+                ingredientes.append(str(value).strip())
+
+        return '\n'.join(ingredientes) if ingredientes else ''
+
+    def _extraer_preparacion(self, row: pd.Series, columns: List[str]) -> str:
+        """Extrae la preparación de una fila."""
+        preparacion = []
+
+        # Buscar en columnas que contengan palabras de preparación
+        for col_name in columns:
+            col_lower = col_name.lower()
+            if any(palabra in col_lower for palabra in ['preparación', 'preparacion', 'pasos', 'método', 'metodología', 'elaboración', 'instrucciones']):
+                value = row[col_name]
+                if pd.notna(value) and str(value).strip():
+                    preparacion.append(str(value).strip())
+
+        # Si no encontró columna específica, buscar en columnas después de la segunda
+        if not preparacion:
+            for i in range(2, min(5, len(columns))):  # Buscar hasta la quinta columna
+                value = row.iloc[i]
+                if pd.notna(value) and str(value).strip():
+                    # Solo agregar si parece ser pasos de preparación (no ingredientes)
+                    str_value = str(value).strip()
+                    if not self._parece_ingrediente(str_value) and not self._es_url(str_value):
+                        preparacion.append(str_value)
+
+        return '\n'.join(preparacion) if preparacion else ''
+
+    def _extraer_imagenes_por_valor(self, row: pd.Series, columns: List[str], creador: str) -> List[Dict[str, Any]]:
+        """Detecta URLs de imagen en la fila (por ejemplo, tercera columna)."""
+        imagenes: List[Dict[str, Any]] = []
+
+        for col_name in columns:
+            col_lower = col_name.lower()
+            if any(palabra in col_lower for palabra in ['imagen', 'foto', 'url']) or 'imagenes' in col_lower:
+                value = row[col_name]
+                if pd.notna(value):
+                    posibles_urls = self._extraer_urls(str(value))
+                    imagenes.extend(self._construir_objetos_imagen(posibles_urls, creador))
+
+        # Si no hay columnas específicas, revisar las columnas siguientes a ingredientes/preparación
+        for i in range(2, len(columns)):
+            value = row.iloc[i]
+            if pd.notna(value):
+                posibles_urls = self._extraer_urls(str(value))
+                imagenes.extend(self._construir_objetos_imagen(posibles_urls, creador))
+
+        # Eliminar duplicados manteniendo orden
+        vistas = set()
+        imagenes_unicas = []
+        for img in imagenes:
+            url = img['url']
+            if url not in vistas:
+                vistas.add(url)
+                imagenes_unicas.append(img)
+        return imagenes_unicas
+
+    def _extraer_urls(self, texto: str) -> List[str]:
+        if not texto:
+            return []
+        patrones = re.findall(r'(https?://\S+)', texto, re.IGNORECASE)
+        # Limpiar signos de puntuación al final
+        urls = [url.rstrip('.,);]"\'') for url in patrones]
+        return [url for url in urls if self._es_url(url)]
+
+    def _construir_objetos_imagen(self, urls: List[str], creador: str) -> List[Dict[str, Any]]:
+        imagenes = []
+        for url in urls:
+            imagenes.append({
+                'url': url,
+                'autor': creador,
+                'descripcion': None,
+            })
+        return imagenes
+
+    @staticmethod
+    def _es_url(texto: str) -> bool:
+        if not texto:
+            return False
+        texto = texto.strip().lower()
+        patrones = ['http://', 'https://', 'www.', '.jpg', '.jpeg', '.png', '.gif', '.webp']
+        return any(patron in texto for patron in patrones)
+
+    def _obtener_imagenes_embebidas(
+        self, workbook, sheet_name: str
+    ) -> Tuple[Dict[int, List[Dict[str, Any]]], List[Dict[str, Any]]]:
+        imagenes_por_fila: Dict[int, List[Dict[str, Any]]] = {}
+        imagenes_sin_posicion: List[Dict[str, Any]] = []
+
+        if sheet_name not in workbook.sheetnames:
+            return imagenes_por_fila, imagenes_sin_posicion
+
+        worksheet = workbook[sheet_name]
+        imagenes = getattr(worksheet, "_images", [])
+
+        for idx, image in enumerate(imagenes, start=1):
+            imagen_bytes = self._obtener_bytes_imagen(image)
+            if not imagen_bytes:
+                continue
+
+            formato = getattr(image, 'format', 'png') or 'png'
+            fila = self._obtener_fila_desde_anchor(image.anchor)
+
+            info_imagen = {
+                'bytes': imagen_bytes,
+                'formato': formato.lower(),
+                'indice': idx,
+            }
+
+            if fila is not None:
+                imagenes_por_fila.setdefault(fila, []).append(info_imagen)
+            else:
+                imagenes_sin_posicion.append(info_imagen)
+
+        return imagenes_por_fila, imagenes_sin_posicion
+
+    def _obtener_fila_desde_anchor(self, anchor: Any) -> Optional[int]:
+        if not anchor:
+            return None
+
+        origen = getattr(anchor, '_from', None) or getattr(anchor, 'from', None) or anchor
+
+        fila = getattr(origen, 'row', None)
+        if fila is None:
+            return None
+
+        # openpyxl usa índices base 0; DataFrame comienza en 0 tras eliminar encabezados (fila 0 es encabezado en Excel)
+        fila_df = int(fila) - 1
+        return fila_df if fila_df >= 0 else None
+
+    @staticmethod
+    def _obtener_bytes_imagen(image) -> Optional[bytes]:
+        data = None
+        if hasattr(image, '_data'):
+            try:
+                data = image._data()
+            except Exception:
+                data = None
+
+        if hasattr(image, 'image') and hasattr(image.image, 'tobytes'):
+            try:
+                return image.image.tobytes()
+            except Exception:
+                pass
+
+        if hasattr(image, 'ref') and hasattr(image.ref, 'blob'):
+            return image.ref.blob
+
+        if data is None:
+            return None
+
+        if isinstance(data, bytes):
+            return data
+        if hasattr(data, 'getvalue'):
+            return data.getvalue()
+        if hasattr(data, 'read'):
+            return data.read()
+        return None
+
+    def _resolver_imagenes_embebidas(
+        self,
+        imagenes_por_fila: Dict[int, List[Dict[str, Any]]],
+        imagenes_sin_posicion: List[Dict[str, Any]],
+        row_idx: int,
+        nombre_receta: str,
+        creador: str,
+    ) -> List[Dict[str, Any]]:
+        imagenes_resultado: List[Dict[str, Any]] = []
+
+        imagenes_fila = imagenes_por_fila.pop(row_idx, [])
+
+        if not imagenes_fila:
+            return imagenes_resultado
+
+        if not self.supabase_manager.imagenes_habilitadas():
+            print("  ⚠️ Cloudinary no disponible: no se subirán imágenes embebidas")
+            return imagenes_resultado
+
+        for posicion, info in enumerate(imagenes_fila, start=1):
+            upload = self._subir_imagen_embebida(info, nombre_receta, creador, posicion)
+            if upload:
+                upload['autor'] = creador
+                imagenes_resultado.append(upload)
+
+        return imagenes_resultado
+
+    def _subir_imagen_embebida(
+        self,
+        info_imagen: Dict[str, Any],
+        nombre_receta: str,
+        creador: str,
+        posicion: int,
+    ) -> Optional[Dict[str, Any]]:
+        bytes_imagen = info_imagen.get('bytes')
+        if not bytes_imagen:
+            return None
+
+        extension = info_imagen.get('formato', 'png')
+        nombre_archivo = self._generar_nombre_imagen(nombre_receta, creador, posicion, extension)
+
+        resultado = self.supabase_manager.subir_imagen(bytes_imagen, nombre_archivo)
+        if resultado:
+            return resultado
+
+        print(f"  ⚠️ Error subiendo imagen embebida '{nombre_archivo}'")
+        return None
+
+    @staticmethod
+    def _generar_nombre_imagen(nombre_receta: str, creador: str, posicion: int, extension: str) -> str:
+        def slugify(valor: str) -> str:
+            valor = unicodedata.normalize('NFKD', valor).encode('ascii', 'ignore').decode('ascii')
+            valor = re.sub(r'[^a-zA-Z0-9]+', '-', valor).strip('-').lower()
+            return valor or 'imagen'
+
+        base = f"{slugify(creador)}-{slugify(nombre_receta)}-{posicion}"
+        return f"{base}.{extension.strip('.')}"
+
+    def _parece_ingrediente(self, texto: str) -> bool:
+        """Determina si el texto parece ser una lista de ingredientes."""
+        texto_lower = texto.lower()
+        # Si contiene muchas cantidades o unidades de medida, probablemente es ingredientes
+        patrones_cantidad = r'\d+\s*(g|kg|ml|l|lt|cucharadas?|cuch|cdas?|tazas?|onzas?|piezas?|unidades?)'
+        return len(re.findall(patrones_cantidad, texto_lower)) > 2
+
+    def _aplicar_alias_creador(self, creador: str) -> str:
+        normalizado = self._normalizar_texto(creador)
+        alias_objetivo = self.creador_aliases.get(normalizado)
+        if alias_objetivo:
+            return alias_objetivo
+        return creador
+
+    @staticmethod
+    def _normalizar_texto(texto: Optional[str]) -> str:
+        if not texto:
+            return ''
+        texto = str(texto).strip().lower()
+        texto = unicodedata.normalize('NFKD', texto)
+        return ''.join(c for c in texto if not unicodedata.combining(c))
+
+    def _refrescar_claves_existentes(self) -> None:
+        try:
+            self.existing_keys = self.supabase_manager.obtener_claves_recetas()
+        except Exception as exc:
+            print(f"Error refrescando claves existentes: {exc}")
+            self.existing_keys = set()
 
 
 class WhatsAppExtractor:
     """Extractor de recetas desde archivos de WhatsApp."""
-    
+
     def __init__(self):
         """Inicializa el extractor con los clientes necesarios."""
         self.mistral_client = MistralClient()
         self.supabase_manager = SupabaseManager()
-        
+        self.excel_extractor = ExcelExtractor(self.supabase_manager) if PANDAS_AVAILABLE else None
+
         # Patrones para detectar mensajes de WhatsApp - formato real del archivo
         self.patron_mensaje = re.compile(
             r'\[(\d{2}/\d{2}/\d{2}),\s*(\d{2}:\d{2}:\d{2})\]\s*([^:]+):\s*(.*)'
@@ -31,20 +524,43 @@ class WhatsAppExtractor:
         self.patron_mensaje_real = re.compile(
             r'(\d{2}/\d{2}/\d{2}),\s*(\d{2}:\d{2})\s*-\s*([^:]+):\s*(.*)'
         )
-    
+
     def procesar_archivo(self, ruta_archivo: str, fecha_desde: Optional[str] = None) -> Dict[str, Any]:
         """
-        Procesa un archivo de WhatsApp y extrae recetas.
-        
+        Procesa un archivo y extrae recetas. Detecta automáticamente si es WhatsApp o Excel.
+
         Args:
-            ruta_archivo: Ruta al archivo de WhatsApp
-            fecha_desde: Fecha desde la cual procesar (formato YYYY-MM-DD)
-            
+            ruta_archivo: Ruta al archivo
+            fecha_desde: Fecha desde la cual procesar (formato YYYY-MM-DD) - solo para WhatsApp
+
         Returns:
             Diccionario con estadísticas del procesamiento
         """
         print(f"Procesando archivo: {ruta_archivo}")
-        
+
+        # Detectar tipo de archivo por extensión
+        if ruta_archivo.lower().endswith(('.xlsx', '.xls')):
+            # Procesar como Excel
+            if not self.excel_extractor:
+                return {"error": "Excel support not available. Install pandas and openpyxl."}
+            return self.excel_extractor.procesar_excel(ruta_archivo)
+        else:
+            # Procesar como WhatsApp
+            return self._procesar_whatsapp(ruta_archivo, fecha_desde)
+
+    def _procesar_whatsapp(self, ruta_archivo: str, fecha_desde: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Procesa un archivo de WhatsApp y extrae recetas.
+
+        Args:
+            ruta_archivo: Ruta al archivo de WhatsApp
+            fecha_desde: Fecha desde la cual procesar (formato YYYY-MM-DD)
+
+        Returns:
+            Diccionario con estadísticas del procesamiento
+        """
+        print(f"Procesando archivo: {ruta_archivo}")
+
         # Leer archivo
         try:
             with open(ruta_archivo, 'r', encoding='utf-8') as f:
@@ -52,11 +568,11 @@ class WhatsAppExtractor:
         except Exception as e:
             print(f"Error leyendo archivo: {e}")
             return {"error": str(e)}
-        
+
         # Parsear mensajes
         mensajes = self._parsear_mensajes(contenido)
         print(f"Encontrados {len(mensajes)} mensajes")
-        
+
         # Determinar fecha mínima a procesar
         fecha_limite = fecha_desde
         if not fecha_limite:
@@ -68,11 +584,11 @@ class WhatsAppExtractor:
         if fecha_limite:
             mensajes = self._filtrar_por_fecha(mensajes, fecha_limite)
             print(f"Después del filtro desde {fecha_limite}: {len(mensajes)} mensajes")
-        
+
         # Agrupar mensajes consecutivos
         bloques = self._agrupar_mensajes_consecutivos(mensajes)
         print(f"Agrupados en {len(bloques)} bloques")
-        
+
         # Procesar cada bloque
         recetas_extraidas = 0
         recetas_insertadas = 0
@@ -120,17 +636,16 @@ class WhatsAppExtractor:
                         print(f"  ❌ Error insertando receta")
             else:
                 print(f"  ℹ️ No se encontraron recetas en el bloque")
-        
+
         # Actualizar estado de procesamiento
         self._actualizar_estado_procesamiento(mensajes[-1]['fecha'] if mensajes else None)
-        
+
         return {
             "mensajes_procesados": len(mensajes),
             "bloques_procesados": len(bloques),
             "recetas_extraidas": recetas_extraidas,
             "recetas_insertadas": recetas_insertadas
         }
-    
     def _parsear_mensajes(self, contenido: str) -> List[Dict[str, Any]]:
         """Parsea los mensajes del archivo de WhatsApp."""
         mensajes = []

@@ -11,6 +11,7 @@
 ## ✨ Highlights
 
 - 🧠 **Extracción con IA (Mistral)** de ingredientes y pasos.
+- 📊 **Soporte Excel** - procesa archivos .xlsx/.xls con recetas automáticamente.
 - 📚 **Base de datos Supabase** con migraciones SQL versionadas.
 - 🖼️ **Galería multifoto** por receta integrada con Cloudinary (autor por imagen).
 - 🔎 **Búsqueda en vivo, filtros por autor, estado de fotos y fecha.**
@@ -53,18 +54,28 @@ CLOUDINARY_URL=cloudinary://<api_key>:<secret>@<cloud_name>
 
 ## 🧭 Flujo Principal
 
-1. **Carga un `.txt` exportado** de WhatsApp (modo panel o CLI).
+1. **Carga un `.txt` exportado** de WhatsApp o **`.xlsx`/`.xls`** con recetas (modo panel o CLI).
 2. El extractor agrupa recetas, autor y metadatos.
 3. **Mistral IA** limpia ingredientes y pasos (tokens optimizados).
 4. Se guardan en **Supabase** (tabla `recetas`) + galería (JSONB `imagenes`).
 5. **Streamlit** muestra fichas con edición, filtros y carruseles.
 
+## 📊 Soporte Excel
+
+El sistema detecta automáticamente archivos Excel (`.xlsx`, `.xls`) y extrae recetas de todas las hojas:
+
+- **Nombre de receta**: Primera columna de cada fila
+- **Ingredientes**: Segunda columna o columnas con "ingredientes" en el nombre
+- **Preparación**: Columnas con "preparación", "pasos", "método" en el nombre
+- **Filtrado inteligente**: Ignora automáticamente links e imágenes
+- **Creador**: Se asigna "Excel Import" a todas las recetas extraídas
+
 ## 🖼️ Galería Cloudinary
 
-- Botón “📸 Subir Foto” acepta múltiples archivos.
+- Botón "📸 Subir Foto" acepta múltiples archivos.
 - Cada imagen pide autor, sube a Cloudinary y guarda URL + metadatos.
 - Carrusel elegante con selectbox y contador.
-- Botón “🗑️ Eliminar imagen” actualiza Supabase + limpia `url_imagen` legacy.
+- Botón "🗑️ Eliminar imagen" actualiza Supabase + limpia `url_imagen` legacy.
 
 ## 🍽️ Panel Streamlit
 
@@ -144,8 +155,8 @@ poetry run python -m src.recetario_whatsapp.extractor \
 
 ## 👨‍💻 Autor & Contacto
 
-**Nombre:** [Samuel Martín]  
-**Email:** [samumarfon@gmail.com]  
+**Nombre:** Samuel Martín 
+**Email:** [samumarfon@gmail.com](samumarfon@gmail.com) 
 **GitHub:** [@raistln](https://github.com/raistln)  
 **LinkedIn:** [Samuel Martín](https://www.linkedin.com/in/samuel-mart%C3%ADn-fonseca-74014b17/)  
 

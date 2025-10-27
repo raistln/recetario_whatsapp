@@ -80,13 +80,17 @@ def main():
         # Configuración de módulos
         st.markdown("---")
         st.header("⚙️ Configuración")
-        
-        # Opción para desactivar imágenes
-        imagenes_habilitadas = st.checkbox(
-            "📷 Habilitar módulo de imágenes",
-            value=True,
-            help="Activa solo si quieres gestionar fotos de recetas"
-        )
+
+        # Opción para desactivar imágenes - solo si están disponibles
+        if supabase_manager.imagenes_habilitadas():
+            imagenes_habilitadas = st.checkbox(
+                "📷 Habilitar módulo de imágenes",
+                value=True,
+                help="Activa solo si quieres gestionar fotos de recetas"
+            )
+        else:
+            imagenes_habilitadas = False
+            st.info("📷 Módulo de imágenes no disponible (falta configuración de Cloudinary)")
         
         # Botón para agregar receta manualmente
         st.markdown("---")
@@ -99,27 +103,68 @@ def main():
         st.markdown("---")
         st.header("📁 Procesar Archivo")
         archivo_subido = st.file_uploader(
-            "Subir archivo de WhatsApp",
-            type=['txt'],
-            help="Sube un archivo .txt exportado de WhatsApp"
+            "Subir archivo de WhatsApp o Excel",
+            type=['txt', 'xlsx', 'xls'],
+            help="Sube un archivo .txt exportado de WhatsApp o un archivo Excel (.xlsx, .xls) con recetas"
         )
         
         if archivo_subido:
             if st.button("Procesar Archivo"):
                 with st.spinner("Procesando archivo..."):
-                    # Guardar archivo temporalmente
-                    contenido = archivo_subido.read().decode('utf-8')
-                    with open('temp_whatsapp.txt', 'w', encoding='utf-8') as f:
-                        f.write(contenido)
-                    
-                    # Procesar archivo
-                    resultado = extractor.procesar_archivo('temp_whatsapp.txt')
-                    
-                    # Limpiar archivo temporal
-                    os.remove('temp_whatsapp.txt')
-                    
-                    st.success(f"Archivo procesado: {resultado.get('recetas_insertadas', 0)} recetas añadidas")
-                    st.markdown("---")
+                    # Detectar tipo de archivo por extensión
+                    nombre_archivo = archivo_subido.name.lower()
+
+                    if nombre_archivo.endswith(('.xlsx', '.xls')):
+                        # Procesar como Excel
+                        with open('temp_excel.xlsx', 'wb') as f:
+                            f.write(archivo_subido.read())
+
+                        # Procesar archivo Excel
+                        resultado = extractor.procesar_archivo('temp_excel.xlsx')
+
+                        # Limpiar archivo temporal
+                        import os
+                        if os.path.exists('temp_excel.xlsx'):
+                            os.remove('temp_excel.xlsx')
+
+                    else:
+                        # Procesar como WhatsApp (txt)
+                        contenido = archivo_subido.read().decode('utf-8')
+                        with open('temp_whatsapp.txt', 'w', encoding='utf-8') as f:
+                            f.write(contenido)
+
+                        # Procesar archivo WhatsApp
+                        resultado = extractor.procesar_archivo('temp_whatsapp.txt')
+
+                        # Limpiar archivo temporal
+                        if os.path.exists('temp_whatsapp.txt'):
+                            os.remove('temp_whatsapp.txt')
+
+                    # Mostrar resultados
+                    if resultado.get('error'):
+                        st.error(f"❌ Error procesando archivo: {resultado['error']}")
+                    else:
+                        st.success(f"✅ Archivo procesado exitosamente!")
+
+                        # Mostrar estadísticas según el tipo de archivo
+                        if resultado.get('archivo_tipo') == 'excel':
+                            st.info(f"""
+                            **Resumen del procesamiento:**
+                            - Hojas procesadas: {resultado.get('hojas_procesadas', 0)}
+                            - Recetas extraídas: {resultado.get('recetas_extraidas', 0)}
+                            - Recetas insertadas: {resultado.get('recetas_insertadas', 0)}
+                            """)
+                        else:
+                            st.info(f"""
+                            **Resumen del procesamiento:**
+                            - Mensajes procesados: {resultado.get('mensajes_procesados', 0)}
+                            - Bloques procesados: {resultado.get('bloques_procesados', 0)}
+                            - Recetas extraídas: {resultado.get('recetas_extraidas', 0)}
+                            - Recetas insertadas: {resultado.get('recetas_insertadas', 0)}
+                            """)
+
+                        # Recargar recetas
+                        st.rerun()
     
     # Formulario para crear nueva receta
     if st.session_state.get('mostrar_formulario_nueva', False):
@@ -196,10 +241,12 @@ def main():
     with col2:
         st.metric("Creadores", len(set(r['creador'] for r in recetas)))
     with col3:
-        if imagenes_habilitadas:
+        if supabase_manager.imagenes_habilitadas() and imagenes_habilitadas:
             st.metric("Con Fotos", len([r for r in recetas if r.get('tiene_foto')]))
-        else:
+        elif supabase_manager.imagenes_habilitadas():
             st.metric("Módulo Imágenes", "Desactivado")
+        else:
+            st.metric("Módulo Imágenes", "No disponible")
     
     st.markdown("---")
     
@@ -243,7 +290,7 @@ def main():
             
             with col2:
                 # Mostrar imágenes solo si está habilitado
-                if imagenes_habilitadas:
+                if supabase_manager.imagenes_habilitadas() and imagenes_habilitadas:
                     imagenes_receta = receta.get('imagenes') or []
 
                     # Compatibilidad con recetas antiguas que solo tienen url_imagen
@@ -378,8 +425,10 @@ def main():
                                     st.rerun()
                                 else:
                                     st.error("Error actualizando la receta")
-                else:
+                elif supabase_manager.imagenes_habilitadas():
                     st.info("📷 Módulo de imágenes desactivado")
+                else:
+                    st.info("📷 Módulo de imágenes no disponible")
             
             # Botones de acción
             col_btn1, col_btn2 = st.columns(2)

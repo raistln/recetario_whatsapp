@@ -3,11 +3,21 @@ Utilidades para interactuar con Supabase.
 """
 import io
 import os
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set, Tuple
 from supabase import create_client, Client
 from datetime import datetime
-from cloudinary import config as cloudinary_config
-from cloudinary.uploader import upload as cloudinary_upload
+
+# Importar cloudinary de manera opcional
+try:
+    from cloudinary import config as cloudinary_config
+    from cloudinary.uploader import upload as cloudinary_upload
+    CLOUDINARY_AVAILABLE = True
+except ImportError:
+    CLOUDINARY_AVAILABLE = False
+    print("Warning: Cloudinary not available. Image upload functionality will be disabled.")
+    # Definir stubs para evitar errores
+    cloudinary_config = None
+    cloudinary_upload = None
 
 
 class SupabaseManager:
@@ -23,23 +33,25 @@ class SupabaseManager:
         
         self.client: Client = create_client(url, key)
         self.storage_bucket = os.getenv('SUPABASE_STORAGE_BUCKET', 'recetas')
+        self.cloudinary_available = CLOUDINARY_AVAILABLE
 
-        cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME')
-        api_key = os.getenv('CLOUDINARY_API_KEY')
-        api_secret = os.getenv('CLOUDINARY_API_SECRET')
+        # Solo configurar cloudinary si está disponible
+        if CLOUDINARY_AVAILABLE:
+            cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME')
+            api_key = os.getenv('CLOUDINARY_API_KEY')
+            api_secret = os.getenv('CLOUDINARY_API_SECRET')
 
-        if not cloud_name or not api_key or not api_secret:
-            raise ValueError(
-                "CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY y CLOUDINARY_API_SECRET deben estar configuradas"
-            )
-
-        self.cloudinary_folder = os.getenv('CLOUDINARY_FOLDER')
-        cloudinary_config(
-            cloud_name=cloud_name,
-            api_key=api_key,
-            api_secret=api_secret,
-            secure=True,
-        )
+            if not cloud_name or not api_key or not api_secret:
+                print("Warning: Cloudinary credentials not configured. Image upload will be disabled.")
+                self.cloudinary_available = False
+            else:
+                self.cloudinary_folder = os.getenv('CLOUDINARY_FOLDER')
+                cloudinary_config(
+                    cloud_name=cloud_name,
+                    api_key=api_key,
+                    api_secret=api_secret,
+                    secure=True,
+                )
     
     def insertar_receta(self, receta: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -184,14 +196,18 @@ class SupabaseManager:
     def subir_imagen(self, archivo_bytes: bytes, nombre_archivo: str) -> Optional[Dict[str, Any]]:
         """
         Sube una imagen a Cloudinary.
-        
+
         Args:
             archivo_bytes: Bytes del archivo de imagen
             nombre_archivo: Nombre del archivo
-            
+
         Returns:
             Diccionario con información de la imagen subida o None si hay error
         """
+        if not self.cloudinary_available or not CLOUDINARY_AVAILABLE:
+            print("Cloudinary not available. Cannot upload image.")
+            return None
+
         try:
             buffer = io.BytesIO(archivo_bytes)
             buffer.seek(0)
@@ -203,7 +219,7 @@ class SupabaseManager:
                 'overwrite': False,
             }
 
-            if self.cloudinary_folder:
+            if hasattr(self, 'cloudinary_folder') and self.cloudinary_folder:
                 upload_options['folder'] = self.cloudinary_folder
 
             response = cloudinary_upload(buffer, **upload_options)
@@ -222,6 +238,15 @@ class SupabaseManager:
             print(f"Error subiendo imagen: {e}")
             return None
     
+    def imagenes_habilitadas(self) -> bool:
+        """
+        Verifica si las funcionalidades de imagen están habilitadas.
+
+        Returns:
+            True si las imágenes están habilitadas, False en caso contrario
+        """
+        return self.cloudinary_available
+    
     def obtener_creadores_unicos(self) -> List[str]:
         """
         Obtiene la lista de creadores únicos.
@@ -239,6 +264,20 @@ class SupabaseManager:
         except Exception as e:
             print(f"Error obteniendo creadores: {e}")
             return []
+
+    def obtener_claves_recetas(self) -> Set[Tuple[str, str]]:
+        """Devuelve un conjunto con las combinaciones (creador, nombre) ya existentes."""
+        claves: Set[Tuple[str, str]] = set()
+        try:
+            response = self.client.table('recetas').select('creador,nombre_receta').execute()
+            for receta in response.data or []:
+                creador = (receta.get('creador') or '').strip().lower()
+                nombre = (receta.get('nombre_receta') or '').strip().lower()
+                if creador and nombre:
+                    claves.add((creador, nombre))
+        except Exception as e:
+            print(f"Error obteniendo claves de recetas: {e}")
+        return claves
 
     def guardar_estado_procesamiento(self, fecha_iso: Optional[str]) -> bool:
         """Guarda la última fecha procesada en Supabase para permitir reanudaciones."""
