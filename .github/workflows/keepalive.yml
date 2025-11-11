@@ -1,0 +1,36 @@
+name: Keep Services Awake
+on:
+  schedule:
+    # Daily ping to keep the Streamlit app warm (06:00 UTC)
+    - cron: "0 6 * * *"
+    # Weekly ping dedicated to Supabase (Sunday 07:00 UTC)
+    - cron: "0 7 * * 0"
+  workflow_dispatch:
+
+jobs:
+  ping-services:
+    runs-on: ubuntu-latest
+    env:
+      STREAMLIT_PING_URL: ${{ secrets.STREAMLIT_PING_URL }}
+      SUPABASE_PING_URL: ${{ secrets.SUPABASE_PING_URL }}
+      SUPABASE_PING_KEY: ${{ secrets.SUPABASE_PING_KEY }}
+    steps:
+      - name: Ping Streamlit app
+        if: ${{ env.STREAMLIT_PING_URL != '' }}
+        run: |
+          echo "Pinging Streamlit app at $STREAMLIT_PING_URL"
+          curl --fail --show-error --silent --location "$STREAMLIT_PING_URL" --output /dev/null
+
+      - name: Ping Supabase health endpoint
+        if: ${{ env.SUPABASE_PING_URL != '' && (github.event_name != 'schedule' || github.event.schedule == '0 7 * * 0') }}
+        shell: bash
+        run: |
+          echo "Pinging Supabase at $SUPABASE_PING_URL"
+          if [ -n "$SUPABASE_PING_KEY" ]; then
+            curl --fail --show-error --silent --location "$SUPABASE_PING_URL" \
+              -H "apikey: $SUPABASE_PING_KEY" \
+              -H "Authorization: Bearer $SUPABASE_PING_KEY" \
+              --output /dev/null
+          else
+            curl --fail --show-error --silent --location "$SUPABASE_PING_URL" --output /dev/null
+          fi
