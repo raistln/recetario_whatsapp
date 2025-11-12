@@ -19,7 +19,8 @@ jobs:
         if: ${{ env.STREAMLIT_PING_URL != '' }}
         run: |
           echo "Pinging Streamlit app at $STREAMLIT_PING_URL"
-          curl --fail --show-error --silent --location "$STREAMLIT_PING_URL" --output /dev/null
+          response=$(curl --fail --show-error --silent --head "$STREAMLIT_PING_URL")
+          echo "$response"
 
       - name: Ping Supabase health endpoint
         if: ${{ env.SUPABASE_PING_URL != '' && (github.event_name != 'schedule' || github.event.schedule == '0 7 * * 0') }}

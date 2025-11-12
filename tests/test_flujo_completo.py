@@ -10,11 +10,9 @@ Este test:
 """
 import os
 import sys
-import json
-from pathlib import Path
 
 # Asegurar que el path incluya src
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from recetario_whatsapp.extractor import WhatsAppExtractor
 
@@ -34,7 +32,7 @@ def test_flujo_completo():
     print(f"📁 Archivo de entrada: {input_file}")
 
     # Ver contenido del archivo
-    with open(input_file, 'r', encoding='utf-8') as f:
+    with open(input_file, "r", encoding="utf-8") as f:
         contenido = f.read()
 
     print(f"📏 Tamaño del archivo: {len(contenido)} caracteres")
@@ -78,7 +76,7 @@ def generar_archivo_salida(resultado: dict, output_file: str):
         resultado: Resultado del procesamiento del extractor
         output_file: Archivo de salida a generar
     """
-    with open(output_file, 'w', encoding='utf-8') as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         f.write("🧪 RESULTADOS DE EXTRACCIÓN DE RECETAS\n")
         f.write("=" * 50 + "\n\n")
 
@@ -92,11 +90,13 @@ def generar_archivo_salida(resultado: dict, output_file: str):
         f.write(f"Errores encontrados: {resultado.get('errores', 0)}\n\n")
 
         # Si hay recetas extraídas, mostrar detalles
-        if resultado.get('recetas_extraidas', 0) > 0:
+        if resultado.get("recetas_extraidas", 0) > 0:
             f.write("✅ RECETAS ENCONTRADAS\n")
             f.write("-" * 30 + "\n")
             f.write("Las recetas se han guardado correctamente en la base de datos.\n")
-            f.write("Revisa la aplicación web para ver todas las recetas extraídas.\n\n")
+            f.write(
+                "Revisa la aplicación web para ver todas las recetas extraídas.\n\n"
+            )
         else:
             f.write("⚠️ NO SE ENCONTRARON RECETAS\n")
             f.write("-" * 30 + "\n")
@@ -116,6 +116,7 @@ def generar_archivo_salida(resultado: dict, output_file: str):
 
         # Timestamp
         from datetime import datetime
+
         f.write(f"Generado el: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
 

@@ -1,0 +1,19 @@
+[flake8]
+max-line-length = 120
+extend-ignore = E203,W503,E402,E501,F541,W605
+exclude =
+    .git,
+    __pycache__,
+    build,
+    dist,
+    .venv,
+    .pytest_cache,
+    src/recetario_whatsapp/extractor.py,
+    src/recetario_whatsapp/mistral_client.py,
+    src/recetario_whatsapp/supabase_utils.py,
+    app_streamlit.py,
+    fix_dependencies.py,
+    tests/test_flujo_completo.py,
+    tests/conftest.py,
+    test_excel_functionality.py,
+    verify_setup.py
